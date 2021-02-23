@@ -1,20 +1,20 @@
-﻿Institution,Rate, Label , Endowmentlabel ,Endowment
-Davidson,7.5, $7.50 ," $821,776,000.00 ",821776000.00
-Haverford,9.5, $9.50 ," $521,538,000.00 ",521538000.00
-Claremont McKenna,12, $12.00 ," $835,306,000.00 ",835306000.00
-Carleton,9.75, $9.75 ," $878,494,000.00 ",878494000.00
-Grinnell,10, $10.00 ," $1,991,605,000.00 ",1991605000.00
-Rhodes,7.7, $7.70 ," $359,279,000.00 ",359279000.00
-Sewanee,9.75, $9.75 ," $410,986,000.00 ",410986000.00
-Furman,9.9, $9.90 ," $702,855,000.00 ",702855000.00
-Oberlin,8.7, $8.70 ," $905,947,000.00 ",905947000.00
-W&L,8, $8.00 ," $1,603,114,000.00 ",1603114000.00
-Swarthmore,9.8, $9.80 ," $2,115,768,000.00 ",2115768000.00
-Colgate,12.5, $12.50 ," $934,827,000.00 ",934827000.00
-Vassar,11.1, $11.10 ," $1,082,831,000.00 ",1082831000.00
-Wesleyan,11, $11.00 ," $990,039,000.00 ",990039000.00
-Hamilton,11.8, $11.80 ," $964,170,000.00 ",964170000.00
-Williams,12.75, $12.75 ," $2,749,653,000.00 ",2749653000.00
-Middlebury,10.96, $10.96 ," $1,124,144,000.00 ",1124144000.00
-Bates,12, $12.00 ," $325,579,000.00 ",325579000.00
-Bowdoin,12, $12.00 ," $1,628,165,000.00 ",1628165000.00
+﻿Institution,Rate, Label , Endowmentlabel ,Endowment,Source
+Davidson,7.5,$7.50 ,"$821,776,000.00 ",821776000,https://www.davidson.edu/offices-and-services/human-resources/student-employment/getting-paid
+Haverford,9.5,$9.50 ,"$521,538,000.00 ",521538000,https://www.haverford.edu/controllers-office/payroll
+Claremont McKenna,14,$14.00 ,"$835,306,000.00 ",835306000,https://www.cmc.edu/new-financial-aid/types/federal-work-study/students
+Carleton,11.25,$11.25 ,"$878,494,000.00 ",878494000,https://www.carleton.edu/business/payroll/student-info/
+Grinnell,8,$8.00 ,"$1,991,605,000.00 ",1991605000,"https://www.grinnell.edu/admission/financial-aid/affording-grinnell/student-employment#:~:text=Hourly%20rate%20begins%20at%20%2410.00,experience%20pay%20after%20each%20semester."
+Rhodes,7.7,$7.70 ,"$359,279,000.00 ",359279000,https://www.rhodes.edu/admission-aid/cost-affordability/admitted-students/student-employment
+Sewanee,9.75,$9.75 ,"$410,986,000.00 ",410986000,https://thesewaneepurple.org/2020/10/29/university-makes-no-promises-amid-student-push-for-higher-wage/
+Furman,9.9,$9.90 ,"$702,855,000.00 ",702855000,https://www.furman.edu/offices-services/human-resources/faq/salary-grades/
+Oberlin,8.8,$8.80 ,"$905,947,000.00 ",905947000,https://www.oberlin.edu/sites/default/files/content/office/human-resources/documents/pay_matrix_guide.pdf
+W&L,8,$8.00 ,"$1,603,114,000.00 ",1603114000,"https://my.wlu.edu/financial-aid/student-employment/student-employee-work-study-handbook#:~:text=Current%20base%20hourly%20pay%20rate,%248.50%20for%20Level%202%20positions"
+Swarthmore,9.8,$9.80 ,"$2,115,768,000.00 ",2115768000,"https://www.swarthmore.edu/student-employment/resources-student-employees#:~:text=Current%20hourly%20rates%20for%20the,Pay%20level%203%3A%20%2410.80%2Fhour"
+Colgate,12.5,$12.50 ,"$934,827,000.00 ",934827000,"https://www.colgate.edu/about/campus-services-and-resources/student-employment-handbook#:~:text=The%20NYS%20minimum%20wage%20increased,scale%20can%20be%20found%20here."
+Vassar,11.1,$11.10 ,"$1,082,831,000.00 ",1082831000,"https://www.vassar.edu/newstudents/answers/student-employment.html#:~:text=The%20hourly%20wage%20is%20%2411.10,applied%20to%20your%20student%20account."
+Wesleyan,11,$11.00 ,"$990,039,000.00 ",990039000,"https://www.wesleyan.edu/finaid/employment/employers/studentsupervisorfaq.html#:~:text=As%20of%20October1%2C%202019%2C%20the,the%20recommended%20student%20wage%20schedule."
+Hamilton,12.5,$12.50 ,"$964,170,000.00 ",964170000,https://www.hamilton.edu/offices/human-resources/student-employment/student-wages
+Williams,13.5,$13.50 ,"$2,749,653,000.00 ",2749653000,https://hr.williams.edu/student-employment/pay/
+Middlebury,11.75,$11.75 ,"$1,124,144,000.00 ",1124144000,http://www.middlebury.edu/offices/business/seo/paid/wagescale
+Bates,12.15,$12.15 ,"$325,579,000.00 ",325579000,https://www.bates.edu/student-employment/student-pay-rate/
+Bowdoin,12.15,$12.15 ,"$1,628,165,000.00 ",1628165000,https://www.bowdoin.edu/student-employment/students/pay-information.html
