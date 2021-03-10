@@ -1,0 +1,24 @@
+{
+    "id": "A63FF38F",
+    "path": "~/GitHub/smithville_community/dashboard/app.R",
+    "project_path": null,
+    "type": "r_source",
+    "hash": "564762281",
+    "contents": "",
+    "dirty": false,
+    "created": 1615402739992.0,
+    "source_on_save": false,
+    "relative_order": 5,
+    "properties": {
+        "cursorPosition": "9,34",
+        "scrollLine": "0"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1615402765,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1615402766011,
+    "read_only": false,
+    "read_only_alternatives": []
+}

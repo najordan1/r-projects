@@ -1,0 +1,310 @@
+#
+# This is a Shiny web application. You can run the application by clicking
+# the 'Run App' button above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    http://shiny.rstudio.com/
+#
+source("libraries.R", local = TRUE)
+source("uiPanels.R", local = TRUE)
+source("utils.R", local = TRUE)
+source("dataIntake.R", local = TRUE) 
+
+# Define UI for application that draws a histogram
+ui <- shinyUI(navbarPage("Smithville CommUNITY Coalition",
+                         home(), #uiPanels.R
+                         newperson(), #uiPanels.R
+                         updateperson(), #uiPanels.R
+                         familyTree(), #uiPanels.R
+                         searchdata(), #uiPanels.R
+                         tagsHead(),
+                         shinyjs::useShinyjs(), #uiPanels.R
+                         #findperson(), #uiPanels.R
+                         viewProperties(),
+                         addProperty(),
+                         tagsHead(),
+                         searchProperties()#,
+                         #voters()
+                         
+    )
+)
+
+# Define server logic
+server <- function(input, output) {
+    #Table----
+    output$dataTable = DT::renderDataTable(DT::datatable(df, options = list(pageLength = 4)))
+    
+    output$voterTable <- renderDataTable({
+        voterData
+    }) 
+    
+    output$propertyTable <- renderDataTable({
+        propertyDf
+    })
+    
+    output$propertyMap <- renderLeaflet({
+        leaflet(taxData) %>%
+            addProviderTiles(provider = "CartoDB.PositronNoLabels") %>%
+            addPolygons(
+                weight = 0.5,
+                color = "black",
+                dashArray = "0",
+                fillOpacity = 0.2
+                ,
+                opacity = 1,
+                fillColor = "red",
+                label =  ~ pid,
+                popup =  ~ mapLabel,
+                noClip = T
+            )
+    })
+    
+    propertyFields <- c("pName","id_pid","taxValue","appValue","intent","devPhase")
+    propertyMandatory <- c("pName", "id_pid")
+    
+    propertyFormData <- reactive({
+        df <- sapply(propertyFields, function(x)
+            input[[x]])
+        df <-
+            c(df, timestamp = format(Sys.time(), "%Y%m%d-%H%M%OS"))
+        df <- t(df)
+        as.data.frame(df)
+    })
+    
+    observe({
+        mandatoryFilled <-
+            vapply(propertyMandatory,
+                   function(x) {
+                       !is.null(input[[x]]) && input[[x]] != ""
+                   },
+                   logical(1))
+        mandatoryFilled <- all(mandatoryFilled, input$id_pid %!in% propertyDf$id_pid)
+        
+        shinyjs::toggleState(id = "submitProperty", condition = mandatoryFilled)
+    })
+    
+    observeEvent(input$submitAnother, {
+        shinyjs::hide("propertySubmitted")
+        shinyjs::hide("submitAnother")
+        shinyjs::show("addPropertyForm")
+    })
+    
+    observeEvent(input$submitProperty, {
+        shinyjs::disable("submitProperty")
+        shinyjs::hide("propertyError")
+        
+        tryCatch({
+            raw_url <-
+                paste0(
+                    "https://mcmap.org/api2/v1/cama/tb_pubowner?columns=id_pid%2Cnme_ownerlastname%2Cnme_ownerfirstname%2Ctxt_mailaddr1%2Ctxt_mailaddr2%2Ctxt_city%2Ctxt_State%2Ctxt_zipcode%2Ctxt_taxyear&filter=id_pid%20%3D%20%2700",
+                    as.character(input$id_pid),
+                    "%27"
+                )
+            polarisDf <- fromJSON(raw_url) %>%
+                mutate(id_pid = substring(as.character(id_pid), 3)) %>%
+                tail(1)
+            
+            df <-
+                left_join(as.data.frame(propertyFormData()), polarisDf, by = "id_pid")
+            sheet_append(
+                "https://docs.google.com/spreadsheets/d/14J89-NEP-LJN4OYrgyVhitfKo1ETQ55lH2LTcAsiguA/edit#gid=0"
+                ,
+                df
+            )
+            propertyDf <- range_read("14J89-NEP-LJN4OYrgyVhitfKo1ETQ55lH2LTcAsiguA")
+        }, error = function(err) {
+            shinyjs::html("error_msg", err$message)
+            shinyjs::show(id = "propertyError", anim = TRUE, animType = "fade")
+        }, finally = {
+            shinyjs::reset("addPropertyForm")
+            shinyjs::hide("addPropertyForm")
+            shinyjs::show("propertySubmitted")
+            shinyjs::show("submitAnother")
+        })
+        
+    })
+    
+    output$propertyPicker <- renderUI({
+        ids <- propertyDf %>%
+            select(id_pid) %>%
+            distinct() %>%
+            pull()
+        
+        ids <- sort(ids)
+        #ids <- prepend(ids, "Nothing Selected", before=1)
+        pickerInput(inputId = "propertySearch"
+                    , label = "Select Property ID"
+                    , choices = ids
+                    , selected = ids[1]
+                    , options = pickerOptions(liveSearch = T, liveSearchStyle = 'startsWith'))
+    })
+    
+    propertySearchData <- reactive({
+        req(input$propertySearch)
+        
+        propertyDf %>%
+            filter(id_pid == input$propertySearch)
+    })
+    
+    voterSearchDf <- reactive({
+        req(input$propertySearch)
+        
+        voterSearchData %>%
+            filter(pid == input$propertySearch)
+    })
+    
+    output$propertySearchDT <- renderDataTable({
+        propertySearchData()
+    })
+    
+    output$voterSearchDT <- renderDataTable({
+        voterSearchDf()
+    })
+
+    
+    #Code for Person type data----
+    
+    #function that creates a unique id for each going
+    create_unique_ids <- function(n, seed_no = 1, char_len = 4){
+      people <- range_read("https://docs.google.com/spreadsheets/d/1v-kWnXkii4EBjR1hc4cfX-nbAdAdiKMei1KG88iy0oM/edit#gid=0")
+      set.seed(seed_no)
+      pool <- c(letters, LETTERS, 0:9)
+      
+      id <- character(n) # pre-allocating vector is much faster than growing it
+      for(i in seq(n)){
+        this_id <- paste0(sample(pool, char_len, replace = TRUE), collapse = "")
+        while(this_id %in% people$Person_ID){ # if there was a duplicate, redo
+          this_id <- paste0(sample(pool, char_len, replace = TRUE), collapse = "")
+        }
+        id[i] <- this_id
+      }
+      id
+    }
+    
+    
+    
+    #Person Fields
+    personFields <-
+      c("name",
+        "email",
+        "dob",
+        "dod",
+        "propID")
+    
+    personMandatory <- c("name")
+    
+    personFormData <- reactive({
+      data <- sapply(personFields, function(x)
+        input[[x]])
+      data <-
+        c(data, timestamp = format(Sys.time(), "%Y%m%d-%H%M%OS"))
+      data <- c(data, id = create_unique_ids(1))
+      data <- t(data)
+      as.data.frame(data)
+    })
+    
+    observe({
+      mandatoryFilled <-
+        vapply(personMandatory,
+               function(x) {
+                 !is.null(input[[x]]) && input[[x]] != ""
+               },
+               logical(1))
+      mandatoryFilled <- all(mandatoryFilled)
+      
+      shinyjs::toggleState(id = "createPerson", condition = mandatoryFilled)
+    })
+    
+    observeEvent(input$createPerson, {
+      dataframe <- as.data.frame(personFormData())
+      sheet_append("https://docs.google.com/spreadsheets/d/1v-kWnXkii4EBjR1hc4cfX-nbAdAdiKMei1KG88iy0oM/edit#gid=0",
+        dataframe
+      )
+    })
+    
+    people <- range_read("https://docs.google.com/spreadsheets/d/1v-kWnXkii4EBjR1hc4cfX-nbAdAdiKMei1KG88iy0oM/edit#gid=0")
+    output$peopleTable = DT::renderDataTable(
+      DT::datatable(people, options = list(pageLength = 4)))
+    
+    
+    #Create dataframe from UI inputted data and add new values to family tree data----
+    values <- reactiveValues()
+    values$data <- data.frame(child = NA, childID = NA, parent = NA, parentID = NA, propertyID = NA, devyear = NA)[-1,];
+      
+    addtoTree <- observeEvent(input$treeAdd, {
+        chiname <- as.character(input$chi)
+        childid <- as.character(input$chiID)
+        parname<- as.character(input$par)
+        parid <- as.character(input$parID)
+        propid <- as.character(input$proID)
+        yearid <- as.character(input$yearID)
+        temp <- data.frame(child = c(chiname), childID = c(childid), parent = c(parname), parentID = c(parid), propertyID = c(propid), devyear = c(yearid))
+        values$data <- rbind(values$data, temp)
+    })
+    
+    #Keep track of data so output a table
+    output$dynamicdata = DT::renderDataTable(
+        #skip first entry
+        #values$data <- values$data[-1,],
+        DT::datatable(values$data, options = list(pageLength = 4))
+    )
+    
+    #Create tree from df and visualize it on the dashboard and save----
+
+    treeMaker <- eventReactive(input$familyTree, {
+            person <- as.character(input$person)
+            anscestor <- as.integer(input$ans)
+            descendant <- as.integer(input$des)
+            graph <- plotAncDes(person, values$data, anscestor, descendant)
+            plot(graph)
+        })
+    
+    output$plot <- renderPlot(treeMaker())
+    
+    #propertytree <- eventReactive(input$familyTree, {
+      #person <- as.character(input$person)
+      #anscestor <- as.integer(input$ans)
+      #descendant <- as.integer(input$des)
+      #graph <- plotAncDes(person, values$data, anscestor, descendant)
+      #plot(graph)
+    #})
+
+    treeSaver <- observeEvent(input$saveTree,{
+      df <- values$data
+      person <- as.character(input$person)
+      anscestor <- as.integer(input$ans)
+      descendant <- as.integer(input$des)
+      #upload to family tree folder on the drive using a specific naming format
+      personID <- df$childID[which(df$child == person)]
+      propID <- df$propertyID[which(df$child == person)]
+      path <- as_dribble("https://drive.google.com/drive/u/2/folders/1qyO_221-_GhZ79cgdNaTsz0GpONWRCjM")
+      name <- paste("PropertyID:",as.character(propID), person, "FamilyTree:",as.character(anscestor),"ancestors", as.character(descendant),"descendants", sep = "", collapse = "")
+      #current error is occurring here on the sheet_write line
+      media <- gs4_create(name, sheets = df)
+      drive_mv(media, path)
+    })
+    
+   
+    updatePerson <- observeEvent(input$updatePerson, {
+      id <- input$pID
+      newemail <- data.frame(input$cemail)
+      newdob <- data.frame(input$cdob)
+      newdod <- data.frame(input$cdod)
+      newpropID <- data.frame(input$cpropID)
+      ss <- "https://docs.google.com/spreadsheets/d/1v-kWnXkii4EBjR1hc4cfX-nbAdAdiKMei1KG88iy0oM/edit#gid=0"
+      #updateemail <- range_write(ss, newemail, range = cell_limits(c(id), c(Email)))
+      #updatedob <- range_write(ss, newdob, range = cell_limits(c(id), c(DOB)))
+      #updatedod <- range_write(ss, newdod, range = cell_limits(c(id), c(DOD)))
+      #updatepropid <- range_write(ss, newpropID, range = cell_limits(c(id), c(Property_ID)))
+    })
+    
+   
+    output$upeopleTable = DT::renderDataTable(
+      DT::datatable(people, options = list(pageLength = 4)))
+}
+
+
+
+# Run the application 
+shinyApp(ui = ui, server = server)

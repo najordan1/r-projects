@@ -1,0 +1,568 @@
+# Data Intake R Script
+setwd("~/GitHub/pronto_c2i/dashboard dev")
+
+
+### spring data: ----
+clean_panel_data_raw <- read.csv("data/C19_Panel_200617.csv", fileEncoding="UTF-8-BOM")
+
+clean_panel_data_raw <- clean_panel_data_raw %>% mutate(date = mdy(date)
+                                                        , dec_sah = mdy(dec_sah)
+                                                        , date_dec = mdy(date_dec)
+                                                        , date_onl = mdy(date_onl)
+                                                        , state_emg = mdy(state_emg)
+                                                        , confcase = mdy(confcase))
+
+# Break out into relational schema
+dates_df <- clean_panel_data_raw %>%
+  select(insname, date, spr_dec, dec_sah, date_dec, date_onl, state_emg, confcase, spr_ex, gradalt, gradchng)
+
+ins_df <- clean_panel_data_raw %>%
+  select(insname, unitid, fips, stabb, web, rankcat, ranker, rankslac, rankuni, rankovrl, sector
+         , ccbasic, latitude, longitude, medical, hospital, level, control, urban, dormcap
+         , pct_ug, date, enr_ug_tot, enr_ug_tot_imgr) %>%
+  mutate(campusType = case_when(urban >= 40 ~ "Rural"
+                                  , urban < 40 & urban >= 30 ~ "Town"
+                                  , urban < 30 & urban >= 20 ~ "Suburb"
+                                  , urban < 20 ~ "City")
+         , sector = case_when(sector == 1 ~ "Public"
+                              , sector == 2 ~ "Private")
+         , hospital = case_when(hospital == 1 ~ "Yes"
+                                , hospital == 2 | hospital == -2 ~ "No")
+         , resHallCap = case_when(is.na(dormcap) == T ~ 0,
+                                  dormcap > enr_ug_tot ~ 100,
+                                  dormcap <= enr_ug_tot ~ 100 * (dormcap / enr_ug_tot))
+         , ccbasic = case_when(ccbasic == 15 ~ "Doctoral Universities: Highest Research Activity"
+                               , ccbasic == 16 ~ "Doctoral Universities: Higher Research Activity"
+                               , ccbasic == 17 ~ "Doctoral Universities: Moderate Research Activity"
+                               , ccbasic == 18 ~ "Master's Colleges & Universities: Larger Programs"
+                               , ccbasic == 19 ~ "Master's Colleges & Universities: Medium Programs"
+                               , ccbasic == 20 ~ "Master's Colleges & Universities: Small Programs"
+                               , ccbasic == 21 ~ "Baccalaureate Colleges: Arts & Sciences Focus"
+                               , ccbasic == 22 ~ "Baccalaureate Colleges: Diverse Fields")
+         , rankcat = case_when(rankcat == "201+" | rankcat == "101-200" | rankcat == "Top 25"
+                               | rankcat == "26-50" | rankcat == "51-100" ~ rankcat,
+                               rankcat == "" | is.na(rankcat) ~ "Not Ranked")
+         , pctIntl = as.integer(100 * (enr_ug_tot_imgr / enr_ug_tot))
+         , web = paste0("https://", web)
+         )
+
+demo_df <- clean_panel_data_raw[ ,33:92]
+
+status_df <- clean_panel_data_raw %>%
+  select(insname, date, stat_c19, stat_onl, stat_se, stat_sah, stat_dec)%>%
+  mutate(online_status = case_when(stat_dec == 0 & stat_onl == 0 ~ "No Decision"
+                                   , stat_dec == 1 & stat_onl== 0 ~ "Announced Online Transition"
+                                   , stat_onl == 1 ~ "Transitioned to Online")) 
+
+ins_df$online_status <- status_df$online_status 
+
+sports <- read.csv("data/EADA_2019.csv")
+sports <- sports %>%
+  select(unitid, IL_TOTAL_REVENUE_ALL)
+
+ncaa <- read_csv("data/NCAA Conferences.csv")
+ncaa <- ncaa %>%
+  mutate(division = case_when(confname != "Other" & confname != "NCAA Division II"
+                           & confname != "NCAA Division III" ~ "NCAA Division I"
+                           , confname == "Other" | confname == "NCAA Division II"
+                           | confname == "NCAA Division III" ~ confname)
+         , unitid = as.numeric(unitid)
+         , conference = case_when(division == "NCAA Division I" ~ confname
+                            , division != "NCAA Division" ~ "N/A"))
+
+ins_df <- left_join(ins_df, sports)
+ins_df$IL_TOTAL_REVENUE_ALL[is.na(ins_df$IL_TOTAL_REVENUE_ALL)] <- 0
+
+ins_df <- left_join(ins_df, ncaa, by = "unitid")
+
+saveRDS(ins_df, file = "data/ins_df.rds")
+saveRDS(status_df, file = "data/status_df.rds")
+saveRDS(demo_df, file = "data/demo_df.rds")
+saveRDS(dates_df, file = "data/dates_df.rds")
+
+# spring break data----
+
+spring_break <- clean_panel_data_raw %>%
+  filter(date == "2020-03-11"
+         , spr_dec==0) %>%
+  select(date_dec) %>%
+  group_by(date_dec)
+
+spring_break <- subset(as.data.frame(table(spring_break)), Freq != 0) %>%
+  rename(dates = spring_break, nonBreakvalues = Freq) %>%
+  filter(dates != "") %>%
+  mutate(dates = ymd(dates))
+
+spring_break_dec <- clean_panel_data_raw %>%
+  filter(date == "2020-03-11"
+         , spr_dec==1) %>%
+  select(date_dec) %>%
+  group_by(date_dec)
+
+spring_break_dec <- subset(as.data.frame(table(spring_break_dec)), Freq != 0) %>%
+  rename(dates = spring_break_dec, breakvalues = Freq) %>%
+  filter(dates != "") %>%
+  mutate(dates = ymd(dates))
+
+spring_break <- full_join(spring_break, spring_break_dec)
+
+saveRDS(spring_break, file = "data/springBreak.rds")
+
+# Peer inst ----
+names_id_df <- ins_df %>%
+  mutate(insname = as.character(insname)) %>%
+  select(insname, unitid) %>%
+  distinct(insname, unitid)
+
+peer_ins_df <- read.csv("data/chronicle-peer-ins.csv", fileEncoding="UTF-8-BOM")
+
+institution <- peer_ins_df %>%
+  select(unitid = Institution) %>%
+  left_join(names_id_df) %>%
+  rename(ins_id = unitid, institution = insname)
+
+institution <- setDT(institution, keep.rownames = TRUE)[]
+institution <- institution %>%
+  mutate(rn= as.numeric(rn))
+
+selected_peer <- peer_ins_df %>%
+  select(unitid = Selected.Peer) %>%
+  left_join(names_id_df) %>%
+  rename(selected_peer = insname, peer_id = unitid)
+# While merge, by =  NULL was not working, so I added rownames as the first column
+selected_peer <- setDT(selected_peer, keep.rownames = TRUE)[]
+selected_peer <- selected_peer%>%
+  mutate(rn= as.numeric(rn))
+
+
+peer_institution_df <- merge(institution, selected_peer, by = "rn", sort = T) 
+peer_institution_df$institution[is.na(peer_institution_df$institution)] <- "NA"
+peer_institution_df$selected_peer[is.na(peer_institution_df$selected_peer)] <- "NA"
+
+saveRDS(peer_institution_df, file = "data/peer_institution_df.rds")
+
+# 
+src <- peer_institution_df$institution
+target <- peer_institution_df$selected_peer
+# 
+networkData <- data.frame(src, target)
+
+saveRDS(networkData, file = "data/networkData.rds")
+# 
+# # Plot
+# simpleNetwork(networkData)
+
+
+## reopen data
+Chronicle_Data_UnitIDs <- read_csv("data/Chronicle Data UnitIDs.csv")
+Chronicle_Data_UnitIDs <- Chronicle_Data_UnitIDs %>% select(subset = -c("insname"))
+
+locationData <- ins_df %>%
+  filter(date == "2020-03-01") %>%
+  mutate(unitid = as.character(unitid)) %>%
+  select(insname, longitude, latitude, unitid)
+
+Chronicle_Data_UnitIDs <- left_join(Chronicle_Data_UnitIDs, locationData, by = "unitid")
+saveRDS(Chronicle_Data_UnitIDs, "data/clean chronicle reopen data.rds")
+
+
+
+###covid data----
+
+### !!!!!! see below !!!!!
+#please never run this code again it's causing bugs? current countyData.rds is fine
+#weird versions of countyData can cause translation errors between GDAL and PROJ.4 on the
+#R shiny Ubuntu server (see issue #149)
+
+#  library(tidycensus)
+# census_api_key("5bf8ad8366d7451a406f74e5b4c9df63359ae7e7", overwrite = TRUE, install = TRUE)
+# readRenviron("~/.Renviron")
+# 
+# us <- get_acs(geography = "county", variables = "B01003_001", geometry = TRUE)
+# 
+# us <- us %>%
+#   mutate(fips = as.integer(GEOID))
+# library(rmapshaper)
+# us <- us %>% ms_simplify(keep = 0.05, keep_shapes=TRUE)
+# saveRDS(us, "data/countyData.rds")
+
+
+
+
+#law school data ----
+law_schools <- read.csv("data/Law Data/Law Schools - Data.csv", fileEncoding="UTF-8-BOM")
+locationData <- read.csv("data/all schools IPEDS data.csv", fileEncoding="UTF-8-BOM")
+abaID <- read.csv("data/Law Data/ABA ids.csv", fileEncoding="UTF-8-BOM")
+lawFirstYear <- read.xlsx("data/Law Data/Copy of 2019_First_Year_Class_.xlsx")
+lawDemo <- read.xlsx("data/Law Data/Copy of 2019_JD_Enrollment_and_Ethnicity.xlsx")
+lawBasics <- read.xlsx("data/Law Data/Copy of 2019_The Basics.xlsx")
+
+law_schools <- left_join(law_schools, locationData, by = "UnitID")
+
+law_schools <- law_schools %>%
+  unite("video", c("Video.Platform", "Online.Platform..MTO."), sep = ", ")
+
+law_schools$video <- law_schools$video %>%
+  str_replace("80", "Zoom") %>%
+  str_replace("81", "Microsoft Teams") %>%
+  str_replace("82", "WebEx") %>%
+  str_replace("83", "Google Hangouts") %>%
+  str_replace("84", "Skype for Business") %>%
+  str_replace("85", "Other Platform") %>%
+  str_replace("86", "Blackboard") %>%
+  str_replace("87", "Echo360") %>%
+  str_replace("88", "More Than One") %>%
+  str_replace("89", "None of the Above") %>%
+  str_replace("90", "Blackboard Collaborate") %>%
+  str_replace("91", "Canvas") %>%
+  str_replace("92", "Moodle") %>%
+  str_replace("93", "Panopto")
+
+law_schools <- law_schools %>%
+  mutate(GRE.Accepted. = case_when(GRE.Accepted. == 1 ~ "Yes"
+                                   , GRE.Accepted. == 0 ~ "No")) %>%
+  mutate(lawSpecific = case_when(Law.School.or.University.Plan == 21 ~ "Law School Specific"
+                                 , Law.School.or.University.Plan == 20 ~ "University Plan")) %>%
+  filter(!is.na(UnitID), !is.na(Latitude), !is.na(Longitude))
+  
+
+law_schools <- left_join(law_schools, abaID)
+
+lawFirstYear <- lawFirstYear %>%
+  select(School.List, Total.FY.class.ALL, Acceptence.Rate, lsatMedian, LSATtwoFive, LSATsevenFive)
+
+
+
+law_schools <- left_join(law_schools, lawFirstYear)
+
+lawDemo <- lawDemo %>%
+  select(School.List, Race.Unk.JD.Degrees.Awd, Minority.Degrees.Awd, Total.Degrees.Awarded) %>%
+  mutate(Race.Unk.JD.Degrees.Awd = as.numeric(Race.Unk.JD.Degrees.Awd)
+         , Minority.Degrees.Awd = as.numeric(Minority.Degrees.Awd)
+         , Total.Degrees.Awarded = as.numeric(Total.Degrees.Awarded)
+         , pctMinority = as.integer(((Race.Unk.JD.Degrees.Awd + Minority.Degrees.Awd) / Total.Degrees.Awarded) * 100))
+
+law_schools <- left_join(law_schools, lawDemo)
+
+lawBasics <- lawBasics %>%
+  select(School.List, Type.of.School)
+
+law_schools <- left_join(law_schools, lawBasics)
+
+
+saveRDS(law_schools, "data/lawData.rds")
+
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+
+#Updating fall dashboard: ----
+
+#Run every single line of code here. do not miss one. This will automaticaly update the data.
+#Then, runApp(), make sure there are no new bugs on home page, Four Year Schools or graphs pages,
+#then change uiPanels.R on home and graphs pages to say when data was last updated (lines 26 and 418) redeploy.
+
+setwd("~/GitHub/pronto_c2i/dashboard")
+
+library(tidyverse)
+library(lubridate)
+library(sf)
+
+nyc <- read_csv("https://raw.githubusercontent.com/nychealth/coronavirus-data/master/boro/boroughs-case-hosp-death.csv")
+nyc <- nyc %>%
+  mutate(date = mdy(DATE_OF_INTEREST)) %>%
+  filter(date >= "2020-03-01")
+
+kings <- nyc %>%
+  select(date, cases = BK_CASE_COUNT, deaths = BK_DEATH_COUNT) %>%
+  mutate(county = "Kings", state = "New York", fips = as.integer(36047))
+
+bronx <- nyc %>%
+  select(date, cases = BX_CASE_COUNT, deaths = BX_DEATH_COUNT) %>%
+  mutate(county = "Bronx", state = "New York", fips = as.integer(36005))
+
+queens <- nyc %>%
+  select(date, cases = QN_CASE_COUNT, deaths = QN_DEATH_COUNT) %>%
+  mutate(county = "Queens", state = "New York", fips = as.integer(36081))
+
+ny <- nyc %>%
+  select(date, cases = MN_CASE_COUNT, deaths = MN_DEATH_COUNT) %>%
+  mutate(county = "New York", state = "New York", fips = as.integer(36061))
+
+richmond <- nyc %>%
+  select(date, cases = SI_CASE_COUNT, deaths = SI_DEATH_COUNT) %>%
+  mutate(county = "Richmond", state = "New York", fips = as.integer(36085))
+
+us_counties <- read_csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-counties.csv")
+
+us_counties <- us_counties %>%
+  filter(date >= "2020-03-01") %>%
+  mutate(fips = as.integer(fips))
+
+us_counties <- full_join(us_counties, kings)
+
+us_counties <- full_join(us_counties, bronx)
+
+us_counties <- full_join(us_counties, ny)
+us_counties <- full_join(us_counties, queens)
+us_counties <- full_join(us_counties, richmond)
+
+saveRDS(us_counties, "data/covidData.rds")
+
+
+nonPanel <- read_csv("data/dashboard nonpanel data.csv")
+
+nonPanel <- nonPanel %>%
+  select(unitid, insname, rankcat, sector, ccbasic, latitude, longitude, hospital, campusType
+         , resHallCap, pctIntl, IL_TOTAL_REVENUE_ALL, division, conference, enr_ug_tot)
+
+newFallData_ <- read.csv("data/C2iNathan.csv")
+#TODO Date parsing -----
+newFallData <- newFallData_ %>%
+  rename(date = Timestamp
+         , school = longname
+         , status = mode_c2ilong
+         , web = COVIDWebsite
+         , facultyMeasures = FacultyStaffmeasuresFaculty
+         , staffMeasures = FacultyStaffmeasuresStaff
+         ) %>%
+  separate(school, c("unitid", "insname"), sep = " - ") %>%
+  separate(insname, c("insname", "state"), sep = -4, convert = T) %>%
+  filter(!is.na(insname), !is.na(unitid), !is.na(state)) %>%
+  mutate(state = substr(state, 2, 3)
+         , date = substr(date, start = 1, stop = 9)
+         , month = substr(date, start = 3, stop = 5)
+         , date = case_when(month == "jul" ~ paste0(substr(date, start = 1, stop = 2), "-7-", "2020")
+                            , month == "aug" ~ paste0(substr(date, start = 1, stop = 2), "-8-", "2020"))
+         
+         , facultyMeasures = as.character(facultyMeasures)
+         , staffMeasures = as.character(staffMeasures)) %>% 
+  select(unitid, date, status, web, facultyMeasures, staffMeasures, state) %>%
+  mutate(unitid = as.numeric(unitid)
+         , date = dmy(date)
+         , facultyMeasures = case_when(facultyMeasures != "" ~ facultyMeasures
+                                       , facultyMeasures == "" ~ "None"
+                                       , is.na(facultyMeasures) ~ "None")
+         , staffMeasures = case_when(staffMeasures != "" ~ staffMeasures
+                                     , staffMeasures == "" ~ "None"
+                                     , is.na(staffMeasures) ~ "None")
+         , date = case_when(is.na(date) ~ ymd("2020-03-31")
+                            , !is.na(date) ~ date))
+
+
+#DR. MARSICANO: DATE CHANGE MADE HERE, LINE 344
+
+
+
+home <- newFallData
+
+baseFall <- newFallData
+
+baseFall <- baseFall %>%
+  mutate(date = "2020-03-31"
+         , status = "TBD"
+         , date = ymd(date))
+
+newFallData <- full_join(newFallData, baseFall, by = c("unitid", "date", "status", "web", "facultyMeasures", "staffMeasures"))
+
+newFallData <- newFallData %>%
+  mutate(mapGroup = case_when(status == "Other (specify in notes)" 
+                              | status == "Closed" 
+                              | status == "Other"
+                              | status == ""
+                              | status == "No COVID mentions" 
+                              | status == "No COVID mention" ~ "Other"
+                              , status == "TBD" ~ "To Be Determined"
+                              , status == "Fully online, no students on campus"
+                              | status == "Already an online institution"
+                              | status == "Fully online, at least some students allowed on campus" ~ "Fully Online"
+                              , status == "Primarily online, some courses in person" 
+                              | status == "Primarily online, with delayed transition to in-person instruction" ~ "Primarily Online"
+                              , status == "Fully in person" ~ "Fully In Person"
+                              , status == "Primarily in person, some courses online" ~ "Primarily In Person"
+                              , status == "Hyflex teaching"
+                              | status == "Hybrid or Hyflex teaching"
+                              | status == "Professor's choice"
+                              | status == "Simultaneous teaching"
+                              | status == "Some of a variety of methods, non-specific plan"
+                              | status == "50-50 online and in person" ~ "Hybrid"))
+
+newFallData <- left_join(newFallData, nonPanel, by = "unitid")
+
+newFallData <- newFallData %>%
+  filter(!is.na(latitude)
+         , !is.na(longitude)
+         , date < "2030-01-01"
+         , date != "0001-01-01"
+         , date >= "2020-03-31")
+saveRDS(newFallData, "data/fallData.rds")
+
+locations <- read.csv("data/all schools IPEDS data.csv")
+home <- home %>%
+  mutate(mapGroup = case_when(status == "Other (specify in notes)" 
+                              | status == "Closed" 
+                              | status == "Other"
+                              | status == ""
+                              | status == "No COVID mentions" 
+                              | status == "No COVID mention" ~ "Other"
+                              , status == "TBD" ~ "To Be Determined"
+                              , status == "Fully online, no students on campus"
+                              | status == "Already an online institution"
+                              | status == "Fully online, at least some students allowed on campus" ~ "Fully Online"
+                              , status == "Primarily online, some courses in person" 
+                              | status == "Primarily online, with delayed transition to in-person instruction" ~ "Primarily Online"
+                              , status == "Fully in person" ~ "Fully In Person"
+                              , status == "Primarily in person, some courses online" ~ "Primarily In Person"
+                              , status == "Hyflex teaching"
+                              | status == "Hybrid or Hyflex teaching"
+                              | status == "Professor's choice"
+                              | status == "Simultaneous teaching"
+                              | status == "Some of a variety of methods, non-specific plan"
+                              | status == "50-50 online and in person" ~ "Hybrid"))
+
+locations <- locations %>%
+  rename(unitid = UnitID)
+
+home <- left_join(home, locations)
+saveRDS(home, "data/homeData.rds")
+
+schoolFips <- read.csv("data/school fips.csv")
+schoolFips <- schoolFips %>%
+  select(unitid = UnitID, fips = Fips.County.code..HD2019.)
+
+countyData <- readRDS("data/countyData.rds")
+countyPop <- countyData %>% st_set_geometry(NULL) %>%select(fips, estimate)
+schoolFips <- left_join(schoolFips, countyPop)
+schoolFips <- left_join(schoolFips, us_counties)
+
+schoolFips <- schoolFips %>%
+  mutate(date = ymd(date)
+    , casesPC = cases/estimate
+         , deathsPC = deaths/estimate) %>%
+  filter(date == max(date)-1) %>%
+  select(unitid, fips, estimate, cases, deaths, casesPC, deathsPC, date)
+
+
+
+
+saveRDS(schoolFips, "data/schoolFips.rds")
+
+faculty <- home %>%
+  mutate(Layoffs = case_when(grepl("Layoffs", facultyMeasures) 
+                                       & !grepl("Layoffs", staffMeasures)~1,T~0)
+         , Furloughs = case_when(grepl("Furloughs", facultyMeasures)
+                                       & !grepl("Furloughs", staffMeasures)~1,T~0)
+         , `Work From Home` = case_when(grepl("Work from home options", facultyMeasures)
+                                       & !grepl("Work from home options", staffMeasures)~1,T~0)
+         , `Hiring Freeze` = case_when(grepl("Hiring Freeze", facultyMeasures)
+                                       & !grepl("Hiring Freeze", staffMeasures)~1,T~0))%>%
+  group_by(unitid)%>%
+  filter(date==max(date))%>%
+  ungroup() %>%
+  summarise(Layoffs=sum(Layoffs)
+            ,Furloughs=sum(Furloughs)
+            ,`Work\nFrom\nHome`=sum(`Work From Home`)
+            ,`Hiring\nFreeze`=sum(`Hiring Freeze`))%>%
+  pivot_longer(cols=c("Layoffs", "Furloughs", "Work\nFrom\nHome", "Hiring\nFreeze")
+               , names_to="barGroup"
+               , values_to="Faculty Only")
+
+staff <- home %>%
+  mutate(Layoffs = case_when(!grepl("Layoffs", facultyMeasures) 
+                             & grepl("Layoffs", staffMeasures)~1,T~0)
+         , Furloughs = case_when(!grepl("Furloughs", facultyMeasures)
+                                 & grepl("Furloughs", staffMeasures)~1,T~0)
+         , `Work From Home` = case_when(!grepl("Work from home options", facultyMeasures)
+                                        & grepl("Work from home options", staffMeasures)~1,T~0)
+         , `Hiring Freeze` = case_when(!grepl("Hiring Freeze", facultyMeasures)
+                                       & grepl("Hiring Freeze", staffMeasures)~1,T~0))%>%
+  group_by(unitid)%>%
+  filter(date==max(date))%>%
+  ungroup() %>%
+  summarise(Layoffs=sum(Layoffs)
+            ,Furloughs=sum(Furloughs)
+            ,`Work\nFrom\nHome`=sum(`Work From Home`)
+            ,`Hiring\nFreeze`=sum(`Hiring Freeze`))%>%
+  pivot_longer(cols=c("Layoffs", "Furloughs", "Work\nFrom\nHome", "Hiring\nFreeze")
+               , names_to="barGroup"
+               , values_to="Staff Only")
+
+both <- home %>%
+  mutate(Layoffs = case_when(grepl("Layoffs", facultyMeasures) 
+                             & grepl("Layoffs", staffMeasures)~1,T~0)
+         , Furloughs = case_when(grepl("Furloughs", facultyMeasures)
+                                 & grepl("Furloughs", staffMeasures)~1,T~0)
+         , `Work From Home` = case_when(grepl("Work from home options", facultyMeasures)
+                                        & grepl("Work from home options", staffMeasures)~1,T~0)
+         , `Hiring Freeze` = case_when(grepl("Hiring Freeze", facultyMeasures)
+                                       & grepl("Hiring Freeze", staffMeasures)~1,T~0))%>%
+  group_by(unitid)%>%
+  filter(date==max(date))%>%
+  ungroup() %>%
+  summarise(Layoffs=sum(Layoffs)
+            ,Furloughs=sum(Furloughs)
+            ,`Work\nFrom\nHome`=sum(`Work From Home`)
+            ,`Hiring\nFreeze`=sum(`Hiring Freeze`))%>%
+  pivot_longer(cols=c("Layoffs", "Furloughs", "Work\nFrom\nHome", "Hiring\nFreeze")
+               , names_to="barGroup"
+               , values_to="Faculty and Staff")
+
+both <- left_join(both, faculty)
+both <- left_join(both, staff)
+saveRDS(both, "data/facultyMeasuresData.rds")
+
+# International Data
+
+intlData <- read.csv("data/Fall 2020 Opening Initial Data Collection C2i_ International Institutions (Responses) - Form Responses 1.csv")
+intlData <- intlData %>%
+  rename(web = COVID.19.Website
+         , status = Mode.of.Academic.Delivery
+         , language = Language.of.Instruction
+         , region = Region...Country...Institution
+         , latitude = Latitude
+         , longitude = Longitude
+         , notes = Notes
+         , timestamp = Timestamp) %>% 
+  select(web, status, language, region, latitude, longitude, notes, timestamp,) %>%
+  mutate(mapGroup = case_when(status == "Fully In - Person"
+                              | status == "Primarily In-person"
+                            | status == "Primarily in person, some classes online" ~ "Primarily In Person"
+                            , status == "Fully online, at least some students allowed on campus"
+                            | status == "Fully online, no students on campus"
+                            | status == "Primarily online, some courses in person" 
+                            | status == "Primarily Online"
+                            | status == "Primarily online" ~ "Primarily Online"
+                            , status == "Combination of Previous Modes"
+                            | status == "Combination of Modes"
+                            | status == "Hyflex teaching"
+                            | status == "Other (Unique delivery specify in notes)"
+                            | status == "Professor's choice"
+                            | status == "Simultaneous Teaching"
+                            | status == "Some Variety of Methods (Non - Specific Plan)" ~ "Hybrid"
+                            , status == "TBD" ~ "To Be Determined"
+                            , status == "No COVID-19 Plan Mentioned" ~ "No COVID-19 Plan")) %>%
+  separate(region, into = c("region", "country", "institution"), sep = " - ") %>%
+  mutate(region = case_when(substr(region, 1, 1) == '"' ~ substring(region, 2)
+                             , T ~ region)
+         , institution = case_when(str_sub(institution, -1) == '"' ~ str_sub(institution, 1, -2)
+                                   , T ~ institution)) %>%
+  filter(!is.na(mapGroup))
+
+
+
+saveRDS(intlData, "data/intlData.rds")
+

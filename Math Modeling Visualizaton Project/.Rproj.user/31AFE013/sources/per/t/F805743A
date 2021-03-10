@@ -1,0 +1,24 @@
+{
+    "id": "F805743A",
+    "path": "~/GitHub/pronto_c2i/dataToRDS.R",
+    "project_path": null,
+    "type": "r_source",
+    "hash": "3858380887",
+    "contents": "",
+    "dirty": false,
+    "created": 1615347177081.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "cursorPosition": "173,27",
+        "scrollLine": "169"
+    },
+    "folds": "",
+    "lastKnownWriteTime": 1598541455,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1598541455,
+    "read_only": false,
+    "read_only_alternatives": []
+}
