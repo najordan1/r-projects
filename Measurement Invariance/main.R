@@ -4,21 +4,32 @@ library(likert)
 library(patchwork)
 library(ggplot2)
 
+# These are the 4 levels of measurement invariance testing
+equality_constraints <- list(
+  configural = c(),
+  metric = c("loadings"),
+  scalar = c("loadings", "intercepts"),
+  strict = c("loadings", "intercepts", "residuals")
+)
+
 #' Makes a likert graph displaying responses to question by a group,
-#' which should be a factor variable
-#' for a given question
+#' which should be a factor variable for a given question
 #' @author Nathan Jordan
 #'
+#' @param df - the dataframe
 #' @param question - the survey question to plot
-#' @param group - which grouping should be used
+#' @param group - a factor variable in the data indicating group
+#' Ex: group = factor(group, levels = c("Political Technocrats", "Bureacratic Technocrats", "Rest"))
+#' @param labels - a list mapping column name to full label for display in the plot
+#' Ex. labels = c(QA1 = "What is your gender?")
 #'
 #' @return a likert plot
-create_likert <- function(question, group) {
+create_likert <- function(df, question, group, labels) {
   # Determine correct (ish) labels and colors for responses
   # Obviously, should be changed to correct labels in a given setting, could
   # potentially refactor to be a parameter
   # Color palette from https://colorbrewer2.org/#type=diverging&scheme=RdBu&n=5
-  num_levels <- length(data |> select(question) |> na.omit() |> distinct() |> pull())
+  num_levels <- length(df |> select(question) |> na.omit() |> distinct() |> pull())
   if (num_levels == 5) {
     levels <- c("Strongly Disagree", "Disagree", "Neither Agree nor Disagree", "Agree", "Strongly Agree")
     colors <- c("#ca0020", "#f4a582", "#f7f7f7", "#92c5de", "#0571b0")
@@ -28,14 +39,14 @@ create_likert <- function(question, group) {
   }
   
   # Change responses to factor
-  items <- data |>
+  items <- df |>
     mutate(q = levels[eval(sym(question))],
            q = factor(q, levels = levels))
   
-  grouping <- data$group
+  grouping <- df$group
   items <- items |> select(q)
   # rename to the written out question
-  names(items) <- c(questions[question])
+  names(items) <- c(labels[question])
   
   # create and return the plot
   likert_object <- likert(as.data.frame(items), grouping=grouping)
@@ -48,19 +59,19 @@ create_likert <- function(question, group) {
 #' by underlying concept
 #' @author Nathan Jordan
 #'
+#' @param df - the dataframe
 #' @param concept - which concept or latent variable group to visualize
-#' @param group - which grouping should be used ('technocrats' or 'agencies')
+#' @param questions - a list of the questions/cols for this concept
+#' @param group - a factor variable in the data indicating group
+#' Ex: group = factor(group, levels = c("Political Technocrats", "Bureacratic Technocrats", "Rest"))
+#' @param labels - a list mapping column name to full label for display in the plot
+#' Ex. labels = c(QA1 = "What is your gender?")
 #'
 #' @return a patchwork of likert graphs, 1 for each question in the concept
-create_graphs_by_concept <- function(concept, group) {
-  # Get questions relating to the concept
-  # example format for the questions and concepts objects:
-  #    questions <- c(Q1 = "Question 1", etc)
-  #    concepts <- c(democracy = c(Q1, Q2, Q3, Q4))
-  questions <- concepts[[concept]]
+create_graphs_by_concept <- function(df, concept, questions, group, labels) {
   # Make a graph per question, saving it by question name
   for (question in questions) {
-    plot <- create_likert(question, group)
+    plot <- create_likert(df, question, group, labels)
     # By saving the graph by the iteration variable name, I can easily
     # access it in the patchwork step by string concatenation
     assign(question, plot)
