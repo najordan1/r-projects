@@ -21,17 +21,19 @@ na_numbers <- c(96,97,98,99)
 #takes a min, hence the copy
 df <- df %>% 
  replace_with_na_all(~.x %in% na_numbers)
+# # 
+# gdp <- read_csv("gdp.csv")
 # 
-gdp <- read_csv("gdp.csv")
-
-gdp <- gdp %>%
-  select(country, GDP)
-
-df <- left_join(df, gdp, by="country")
+# gdp <- gdp %>%
+#   select(country, GDP)
+# 
+# df <- left_join(df, gdp, by="country")
 
 df <- df %>% filter(country != 9 & country != 1)
 
 df_copy <- df
+
+df2 <- read.csv("ABII_English.csv")
 
 #------- factor analysis ------
 
