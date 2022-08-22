@@ -252,6 +252,9 @@ adminData <- adminData |>
     )
   )
 
+# Concerning ids that have multiple entries per year and agency
+dataDuplicates <- adminData |> group_by(uid_servidor, ano) |> filter(n() > 1)
+
 # Looking at exit rates:
 adminExitData <- adminData |>
   select(ano, uid_servidor, `Political Technocrat`, `Bureaucratic Technocrat`) |> 
@@ -267,6 +270,26 @@ adminExitData <- adminData |>
 # Example query to generate numbers:
 # adminExitData |> filter(`Political Technocrat` & `2019` & !`2020`)
 
+# Exit rates in particular groups of agencies:
+adminExitData2 <- adminData |> 
+  select(ano, uid_servidor, orgao_superior) |> 
+  pivot_wider(
+    id_cols=c("uid_servidor"),
+    names_from = ano,
+    values_from = orgao_superior,
+    values_fn = list
+  )
+
+# Example query:
+# adminExitData2 |> 
+#   rowwise() |> #forces the list/vector methods to do one row, not entire dataset
+#   filter(
+#     !is.null(`2019`) &
+#     !is.null(`2020`) &
+#     length(intersect(`2019`, c("MEC", "MMA", "MCTIC"))) > 0 &
+#     length(intersect(`2020`, c("MEC", "MMA", "MCTIC"))) == 0 &
+#     length(intersect(`2019`, `2020`)) == 0
+#   )
 
 # Make aggregated data for 2018:
 adminAggregate <- adminData |> 
@@ -276,7 +299,7 @@ adminAggregate <- adminData |>
   pivot_wider(
     names_from = `Political Affiliation`,
     values_from = dummy_value,
-    values_fill = list(dummy_value = 0)
+    values_fill = list
   ) |>
   select(-`Years in Public Service`, -id) |> 
   mutate(total = 1) |> 
