@@ -42,10 +42,10 @@ create_likert <- function(df, question, group, labels) {
   # Color palette from https://colorbrewer2.org/#type=diverging&scheme=RdBu&n=5
   if (num_levels == 5) {
     levels <- c("Strongly Disagree", "Disagree", "Neither Agree nor Disagree", "Agree", "Strongly Agree")
-    colors <- c("#ca0020", "#f4a582", "#f7f7f7", "#92c5de", "#0571b0")
+    colors <- c('#a6611a','#dfc27d','#f5f5f5','#80cdc1','#018571')
   } else {
     levels <- c("Not Important", "Unimportant", "Important", "Very Important")
-    colors <- c("#ca0020", "#f4a582", "#92c5de", "#0571b0")
+    colors <- c('#a6611a','#dfc27d','#80cdc1','#018571')
   }
   
   # Change responses to factor
