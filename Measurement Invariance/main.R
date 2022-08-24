@@ -114,7 +114,14 @@ create_lavaan_model <- function(df, concept, questions, level) {
   # Format the model for lavaan, which expects LV =~ Q1 + ... + Qn
   model <- paste(sym(concept), '=~', paste(questions, collapse = " + "))
   
-  if (level == 'configural') {
+  if (level == 'individual') {
+    lavObject <- lavaan::cfa(
+      model,
+      df,
+      std.lv = T,
+      estimator = "DWLS"
+    )
+  } else if (level == 'configural') {
     lavObject <- lavaan::cfa(
       model,
       df,
