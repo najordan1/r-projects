@@ -14,6 +14,7 @@ library(readxl)
 library(dplyr)
 library(tidyr)
 library(devtools)
+library(naniar)
 
 # Define variables of interest, from Felix:
 highEducation <- c(
@@ -101,7 +102,7 @@ questionLabels <- c(
   QC12 = "Obtaining a salary increase",
   QC13 = "Reaching the public policy's goal",
   QD0 = "How much do you agree with the following statements:",
-  QD1 = "The organizational culture of my agency makes it difficult for coruption practices to take place",
+  QD1 = "The organizational culture of my agency makes it difficult for corruption practices to take place",
   QD2 = "Civil society organizations are able to participate in the policy decision-making processes of the agency where I work",
   QD3 = "My organization is held accountable for achieving results",
   QD4 = "My organization's performance is well-evaluated by society",
@@ -166,15 +167,11 @@ questionLabels <- c(
 concepts <- list(
   Autonomy = c("QC1", "QC2", "QC3", "QC4", "QC5"),
   `Propensity For Corruption` = c("QC9", "QC10", "QC11", "QD1"),
-  Capacity = c("QB1", "QB4", "QD3", "QH2", "QH3", "QH4", "QH5"), #revisit definition of capacity, ind opinions
+  # Capacity = c("QB1", "QB4", "QD3", "QH2", "QH3", "QH4", "QH5"), #revisit definition of capacity, ind opinions
   # Capacity = c("QH2", "QH3", "QH4", "QC12"),
-  `Appointment To Political Appointee` = c("QB2", "QB3", "QB5", "QB6", "QB7", "QB8"), #some of these are maybes
-  Skills = c("QG1", "QG2", "QG3", "QG4", "QG5", "QG6", "QG7"),
-  `In the last 12 months, how often did you interact with` = c("QF1", "QF2", "QF3", "QF4", "QF5", "QF6", "QF7", "QF8", "QF9", "QF10", "QF11"),
   `Importance of Political Connections` = c("QC12", "QC13"),
-  `Political Autonomy` = c("QB2", "QB6", "QC9", "QC12", "QC13", "QE13"),
+  # `Political Autonomy` = c("QB2", "QB6", "QC9", "QC12", "QC13", "QE13"),
   # I know I know, better way to do this:
-  # Questions about cols due to the portuguese
   A = c("QA1", "QA2", "QA4"), # A3 doesn't exist
   B = c("QB1", "QB2", "QB3", "QB4", "QB5", "QB6", "QB7", "QB8"),
   C = c("QC1", "QC2", "QC3", "QC4", "QC5", "QC6", "QC7", "QC8", "QC9", "QC10", "QC11", "QC12", "QC13"),
@@ -185,12 +182,15 @@ concepts <- list(
   H = c("QH1", "QH2", "QH3", "QH4", "QH5"),
   I = c("QI1", "QI2", "QI3", "QI4", "QI5", "QI6", "QI7", "QI8", "QI9", "QI10"),
   J = c("QJ1", "QJ2", "QJ3", "QJ4"),
-  `Interesting Results` = c("QC1", "QC5", "QC10", "QD5", "QE13")
+  Quality = c("QH2", "QH1", "QH5", "QD4"),
+  Capacity = c("QH3", "QH4", "QE4"),#, "QE2", "QE3", "QE5"),
+  `Political Autonomy` = c("QC9", "QE13", "QB2", "QD1", "QC4")
 )
 
 # Import and clean data:
 adminData <- read_excel("2018 Administrative Data.xlsx", sheet = "microdados")
-surveyData <- read.csv("Brazil Data.csv")
+surveyData <- read.csv("Brazil Data.csv") |> 
+  replace_with_na_all(~.x==999)
 
 # Source measurement invariance functions from Nathan's github
 # Brings in the following functions:
@@ -207,7 +207,34 @@ source_url("https://raw.githubusercontent.com/najordan1/r-projects/main/Measurem
 #### FORMATTING ADMINISTRATIVE DATA ----
 
 # Create variables of interest in admin data
-adminData <- adminData |> 
+adminData <- adminData |>
+  # filter(!(orgao_superior == "MEC" & grepl('PROFESSOR', cargo))) |> 
+  filter(
+    # Rules sent by Felix to remove university professors:
+    !grepl("^UF", orgao),
+    !grepl("^IF", orgao),
+    !grepl("^UNI", orgao),
+    !grepl("^C.PEDRO", orgao),
+    !grepl("^CEFET", orgao),
+    !grepl("^EPL", orgao),
+    !grepl("^EAF", orgao),
+    !grepl("^EX-TER", orgao),
+    !grepl("^CODEBAR", orgao),
+    !grepl("^ETF/MT", orgao),
+    !grepl("^UNB", orgao),
+    !grepl("^FUFPEL", orgao),
+    !grepl("^FUFOP", orgao),
+    !grepl("^FURG", orgao),
+    !grepl("^FUFS", orgao),
+    !grepl("^FUFSCAR", orgao),
+    !grepl("^UTFPR", orgao),
+    !grepl("^C.EX", orgao),
+    !grepl("F OSORIO", orgao),
+    !grepl("^C.AER", orgao),
+    !grepl("^MARE", orgao),
+    !grepl("^CFETPE", orgao),
+    !grepl("^FUFT", orgao)
+  ) |> 
   transmute(
     ano = ano,
     uid_servidor = uid_servidor,
@@ -299,7 +326,7 @@ adminAggregate <- adminData |>
   pivot_wider(
     names_from = `Political Affiliation`,
     values_from = dummy_value,
-    values_fill = list
+    values_fill = list(dummy_value = 0)
   ) |>
   select(-`Years in Public Service`, -id) |> 
   mutate(total = 1) |> 
@@ -309,7 +336,8 @@ adminAggregate <- adminData |>
     bt_pct = 100 * (`Bureaucratic Technocrat` / total),
     pt_pct = 100 * (`Political Technocrat` / total),
     pa_pct = 100 * (1 - (`No Pol Affiliation` / total))
-  )
+  ) |> 
+  select(orgao_superior, total, bt_pct, pt_pct, pa_pct, everything())
 
 #### SURVEY DATA ----
 
@@ -327,18 +355,78 @@ surveyData <- surveyData |>
   filter(
     # Cut survey respondents without an agency mapping
     orgao_superior != 'Eu não sei/não quero responder'
+    #, orgao_superior != 'MEC'
   ) |> 
   mutate(
     # map the keys here to the agency keys, trimming whitespace when needed
     orgao_superior = agencyMapping[trimws(orgao_superior)],
     group = factor(
       case_when(
-        orgao_superior %in% c("MTB", "MMFDH", "MCID") ~ "PT",
-        orgao_superior %in% c("MEC", "MMA", "MCTIC") ~ "BT",
+        orgao_superior %in% c("MTB", "MCID") ~ "PT",
+        orgao_superior %in% c("MS", "MMA") ~ "BT",
         T ~ "Rest"
       ), levels = c("PT", "BT", "Rest")
     )
   )
 
 # Can then view the Likert graphs like this:
-create_graphs_by_concept(surveyData, "Propensity For Corruption", concepts[["Propensity For Corruption"]], "group", questionLabels)
+create_graphs_by_concept(surveyData, "Political Autonomy", concepts[["Political Autonomy"]], "group", questionLabels)
+
+png("Political Autonomy.png", units="in", width=14, height=5, res=300)
+# code
+dev.off()
+
+polAutonomyModel <- create_lavaan_model(surveyData, 'Political Autonomy', concepts[["Political Autonomy"]], 'individual')
+capModel <- create_lavaan_model(surveyData, 'Capacity', concepts[["Capacity"]], 'individual')
+qualModel <- create_lavaan_model(surveyData, 'Quality', concepts[["Quality"]], 'individual')
+
+fitMeasures(capModel, fit_indices)
+
+qualLoadings <- parameterestimates(qualModel)[['est']][1:4]
+capLoadings <- parameterestimates(capModel)[['est']][1:3]
+polAutonomyLoadings <- parameterestimates(polAutonomyModel)[['est']][1:5]
+
+
+surveyData <- surveyData |> 
+  mutate(
+    Quality = ((QH2*qualLoadings[[1]]) + (QH1*qualLoadings[[2]]) + (QH5*qualLoadings[[3]]) + (QD4*qualLoadings[[4]])) / 4,
+    Capacity = ((QH3*capLoadings[[1]]) + (QH4*capLoadings[[2]]) + (QE4*capLoadings[[3]])) / 3,
+    `Political Autonomy` = ((QC9*polAutonomyLoadings[[1]]) + (QE13*polAutonomyLoadings[[2]]) + (QB2*polAutonomyLoadings[[3]]) + (QD1*polAutonomyLoadings[[4]]) + (QC4*polAutonomyLoadings[[5]])) / 5,
+    # Create binary variables on high vs low:
+    Quality = case_when(
+      Quality > (3 * sum(qualLoadings)) / 4 ~ 1,
+      T ~ 0
+    ),
+    Capacity = case_when(
+      Capacity > sum(capLoadings) ~ 1,
+      T ~ 0
+    ),
+    `Political Autonomy` = case_when(
+      `Political Autonomy` > (3 * sum(polAutonomyLoadings)) / 5 ~ 1,
+      T ~ 0
+    )
+  )
+
+adminJoin <- adminAggregate |> select(orgao_superior, pt_pct, bt_pct, pa_pct, total, `Civil Servant`, `Highly Educated`)
+
+surveyData <- surveyData |> left_join(adminJoin)
+
+surveyData <- surveyData |> 
+  mutate(
+    appointee = case_when(QI8 == 1 ~ 1, T ~ 0),
+    highlyEducated = case_when(QA4 >= 3 ~ 1, T ~ 0)
+  )
+
+fit_indices <- c("chisq", "df", "pvalue", "cfi", "rmsea")
+
+# r1 <- lm(Quality ~ bt_pct + pa_pct + `Highly Educated` + `Civil Servant`, surveyData)
+# summary(r1)
+
+r1 <- glm(`Political Autonomy` ~ bt_pct + pt_pct + pa_pct + appointee + highlyEducated, family = "binomial", surveyData)
+r2 <- glm(Quality ~ bt_pct + pt_pct + pa_pct + appointee + highlyEducated, family = "binomial", surveyData)
+r3 <- glm(Capacity ~ bt_pct + pt_pct + pa_pct + appointee + highlyEducated, family = "binomial", surveyData)
+
+summary(r1)
+summary(r2)
+summary(r3)
+
