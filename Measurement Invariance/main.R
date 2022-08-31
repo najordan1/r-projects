@@ -3,6 +3,7 @@ library(dplyr)
 library(likert)
 library(patchwork)
 library(ggplot2)
+library(semPlot)
 
 # These are the 4 levels of measurement invariance testing
 equality_constraints <- list(
@@ -248,4 +249,39 @@ latent_variable_explorer <- function(df, concept, questions){
     ggplot(aes(eval(sym(concept)), group)) +
     geom_jitter(alpha = 0.15, size = 2.5, color = "#2c7fb8", height=0.1) +
     theme_minimal() + labs(y="", x=sym(concept))
+}
+
+#' Generates a path diagram for a CFA model. This code comes from Sacha
+#' Epskamp's Structural Equation Modeling course. The model passed must have
+#' at least 2 latent variables.
+#'
+#' @param model a lavaan object
+#' @param filename the name of the file to be saved
+#'
+#' @return a path diagram
+create_path_diagram <- function(model, filename) {
+  semPaths(
+    model,
+    what = "col", # this argument controls what the color of edges represent. In this case, standardized parameters
+    whatLabels = "par", # This argument controls what the edge labels represent. In this case, parameter estimates
+    #as.expression = c("nodes","edges"), # This argument draws the node and edge labels as mathematical expressions
+    style = "lisrel", # This will plot residuals as arrows, closer to what we use in class
+    residScale = 10, # This makes the residuals larger
+    theme = "colorblind", # qgraph colorblind friendly theme
+    layout = "tree2", # tree layout options are "tree", "tree2", and "tree3"
+    cardinal = "lat cov", # This makes the latent covariances connect at a cardinal center point
+    curvePivot = TRUE, # Changes curve into rounded straight lines
+    sizeMan = 4, # Size of manifest variables
+    sizeLat = 10, # Size of latent variables
+    edge.label.cex = 0.6,
+    mar = c(9,1,8,1), # Sets the margins
+    reorder = FALSE, # Prevents re-ordering of observed variables
+    filetype = "png", # Store to PDF
+    filename = filename, # Set the name of the file
+    width = 8, # Width of the plot
+    height = 5, # Height of plot
+    groups = "latents", # Colors according to latent variables,
+    pastel = TRUE, # Pastel colors
+    borders = FALSE # Disable borders,
+  )
 }
